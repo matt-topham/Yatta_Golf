@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
@@ -11,7 +12,18 @@ function App() {
     selectedProduct: '',
     decorationType: '',
     customDecoration: '',
+    decorationLocation: '',
+    decorationSize: '',
+    decorationFile: null,
     quantity: 1,
+    sizes: {
+      XS: 0,
+      S: 0,
+      M: 0,
+      L: 0,
+      XL: 0,
+      '2XL': 0
+    },
     customerName: '',
     email: '',
     phone: '',
@@ -32,6 +44,25 @@ function App() {
     { value: 'heat-transfer', label: 'Heat Transfer' },
     { value: 'engraving', label: 'Engraving' },
     { value: 'custom', label: 'Custom Design' }
+  ];
+
+  // Decoration locations
+  const decorationLocations = [
+    { value: 'front-chest', label: 'Front Chest' },
+    { value: 'front-center', label: 'Front Center' },
+    { value: 'back-center', label: 'Back Center' },
+    { value: 'back-upper', label: 'Back Upper' },
+    { value: 'left-sleeve', label: 'Left Sleeve' },
+    { value: 'right-sleeve', label: 'Right Sleeve' },
+    { value: 'collar', label: 'Collar' },
+    { value: 'pocket', label: 'Pocket Area' }
+  ];
+
+  // Decoration sizes
+  const decorationSizes = [
+    { value: 'small', label: 'Small (2" x 2")' },
+    { value: 'medium', label: 'Medium (4" x 4")' },
+    { value: 'large', label: 'Large (6" x 6")' }
   ];
 
   // Fetch products from API
@@ -57,15 +88,29 @@ function App() {
 
   // Handle form input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, files } = e.target;
     
-    if (name.startsWith('address.')) {
+    if (type === 'file') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: files[0] || null
+      }));
+    } else if (name.startsWith('address.')) {
       const addressField = name.split('.')[1];
       setFormData(prev => ({
         ...prev,
         address: {
           ...prev.address,
           [addressField]: value
+        }
+      }));
+    } else if (name.startsWith('sizes.')) {
+      const sizeField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        sizes: {
+          ...prev.sizes,
+          [sizeField]: parseInt(value) || 0
         }
       }));
     } else {
@@ -109,40 +154,33 @@ function App() {
   const selectedProductDetails = products.find(p => p.id === parseInt(formData.selectedProduct));
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <h1 style={{ textAlign: 'center', color: '#2c5530' }}>Yatta Golf - Custom Product Order</h1>
+    <div className="app-container">
+      <h1 className="app-title">Yatta Golf - Custom Product Order</h1>
       
-      <form onSubmit={handleSubmit} style={{ background: '#f9f9f9', padding: '30px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+      <form onSubmit={handleSubmit} className="order-form">
         
         {/* Product Selection Section */}
-        <section style={{ marginBottom: '30px' }}>
-          <h2 style={{ color: '#2c5530', borderBottom: '2px solid #2c5530', paddingBottom: '5px' }}>Product Selection</h2>
+        <section className="section">
+          <h2 className="section-title">Product Selection</h2>
           
-          <div style={{ marginBottom: '15px' }}>
+          <div className="form-group refresh-btn">
             <button 
               type="button" 
               onClick={fetchProducts} 
               disabled={loading}
-              style={{ 
-                padding: '10px 15px', 
-                backgroundColor: '#2c5530', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '5px',
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
+              className={`btn btn-primary ${loading ? 'loading' : ''}`}
             >
               {loading ? 'Loading...' : 'Refresh Products'}
             </button>
           </div>
 
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Select Product:</label>
+          <div className="form-group">
+            <label className="form-label">Select Product:</label>
             <select
               name="selectedProduct"
               value={formData.selectedProduct}
               onChange={handleInputChange}
-              style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+              className="form-select"
               required
             >
               <option value="">-- Choose a Product --</option>
@@ -155,37 +193,61 @@ function App() {
           </div>
 
           {selectedProductDetails && (
-            <div style={{ padding: '10px', backgroundColor: '#e8f5e8', borderRadius: '5px', marginBottom: '15px' }}>
+            <div className="product-details">
               <strong>{selectedProductDetails.name}</strong> - ${selectedProductDetails.price}
-              <p style={{ margin: '5px 0', color: '#666' }}>{selectedProductDetails.description}</p>
+              <p>{selectedProductDetails.description}</p>
             </div>
           )}
 
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Quantity:</label>
+          <div className="form-group">
+            <label className="form-label">Quantity:</label>
             <input
               type="number"
               name="quantity"
               value={formData.quantity}
               onChange={handleInputChange}
               min="1"
-              style={{ width: '100px', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+              className="form-input quantity-input"
               required
             />
+          </div>
+
+          {/* Product Sizes Section */}
+          <div className="form-group">
+            <label className="form-label">Product Sizes (Wholesale Orders):</label>
+            <div className="sizes-grid">
+              {Object.keys(formData.sizes).map(size => (
+                <div key={size} className="size-input-group">
+                  <label className="size-label">{size}:</label>
+                  <input
+                    type="number"
+                    name={`sizes.${size}`}
+                    value={formData.sizes[size]}
+                    onChange={handleInputChange}
+                    min="0"
+                    className="form-input size-input"
+                    placeholder="0"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="total-quantity">
+              Total Units: {Object.values(formData.sizes).reduce((sum, qty) => sum + qty, 0)}
+            </div>
           </div>
         </section>
 
         {/* Decoration Section */}
-        <section style={{ marginBottom: '30px' }}>
-          <h2 style={{ color: '#2c5530', borderBottom: '2px solid #2c5530', paddingBottom: '5px' }}>Decoration Options</h2>
+        <section className="section">
+          <h2 className="section-title">Decoration Options</h2>
           
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Decoration Type:</label>
+          <div className="form-group">
+            <label className="form-label">Decoration Type:</label>
             <select
               name="decorationType"
               value={formData.decorationType}
               onChange={handleInputChange}
-              style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+              className="form-select"
             >
               <option value="">-- No Decoration --</option>
               {decorationTypes.map(type => (
@@ -197,156 +259,205 @@ function App() {
           </div>
 
           {formData.decorationType && (
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                {formData.decorationType === 'custom' ? 'Custom Design Description:' : 'Decoration Details:'}
-              </label>
-              <textarea
-                name="customDecoration"
-                value={formData.customDecoration}
-                onChange={handleInputChange}
-                placeholder="Describe your decoration requirements, text, logo details, etc."
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd', resize: 'vertical', minHeight: '80px' }}
-              />
-            </div>
+            <>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Decoration Location:</label>
+                  <select
+                    name="decorationLocation"
+                    value={formData.decorationLocation}
+                    onChange={handleInputChange}
+                    className="form-select"
+                    required
+                  >
+                    <option value="">-- Select Location --</option>
+                    {decorationLocations.map(location => (
+                      <option key={location.value} value={location.value}>
+                        {location.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Decoration Size:</label>
+                  <select
+                    name="decorationSize"
+                    value={formData.decorationSize}
+                    onChange={handleInputChange}
+                    className="form-select"
+                    required
+                  >
+                    <option value="">-- Select Size --</option>
+                    {decorationSizes.map(size => (
+                      <option key={size.value} value={size.value}>
+                        {size.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Upload Design File:</label>
+                <div className="file-upload-container">
+                  <input
+                    type="file"
+                    name="decorationFile"
+                    onChange={handleInputChange}
+                    className="file-input"
+                    accept="image/*,.pdf,.ai,.eps,.svg"
+                    id="decoration-file"
+                  />
+                  <label htmlFor="decoration-file" className="file-input-label">
+                    {formData.decorationFile ? formData.decorationFile.name : 'Choose File...'}
+                  </label>
+                  <div className="file-help-text">
+                    Accepted formats: JPG, PNG, PDF, AI, EPS, SVG (Max 10MB)
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  {formData.decorationType === 'custom' ? 'Custom Design Description:' : 'Decoration Details:'}
+                </label>
+                <textarea
+                  name="customDecoration"
+                  value={formData.customDecoration}
+                  onChange={handleInputChange}
+                  placeholder="Describe your decoration requirements, text, logo details, colors, etc."
+                  className="form-textarea"
+                />
+              </div>
+            </>
           )}
         </section>
 
         {/* Customer Information Section */}
-        <section style={{ marginBottom: '30px' }}>
-          <h2 style={{ color: '#2c5530', borderBottom: '2px solid #2c5530', paddingBottom: '5px' }}>Customer Information</h2>
+        <section className="section">
+          <h2 className="section-title">Customer Information</h2>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Full Name:</label>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Full Name:</label>
               <input
                 type="text"
                 name="customerName"
                 value={formData.customerName}
                 onChange={handleInputChange}
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+                className="form-input"
                 required
               />
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Email:</label>
+            <div className="form-group">
+              <label className="form-label">Email:</label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+                className="form-input"
                 required
               />
             </div>
           </div>
 
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Phone Number:</label>
+          {/* <div className="form-group">
+            <label className="form-label">Phone Number:</label>
             <input
               type="tel"
               name="phone"
               value={formData.phone}
               onChange={handleInputChange}
-              style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+              className="form-input"
             />
-          </div>
+          </div> */}
         </section>
 
         {/* Delivery Address Section */}
-        <section style={{ marginBottom: '30px' }}>
-          <h2 style={{ color: '#2c5530', borderBottom: '2px solid #2c5530', paddingBottom: '5px' }}>Delivery Address</h2>
+        <section className="section">
+          <h2 className="section-title">Delivery Address</h2>
           
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Street Address:</label>
+          <div className="form-group">
+            <label className="form-label">Street Address:</label>
             <input
               type="text"
               name="address.street"
               value={formData.address.street}
               onChange={handleInputChange}
-              style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+              className="form-input"
               required
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>City:</label>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">City:</label>
               <input
                 type="text"
                 name="address.city"
                 value={formData.address.city}
                 onChange={handleInputChange}
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+                className="form-input"
                 required
               />
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>State/Province:</label>
+            <div className="form-group">
+              <label className="form-label">State/Province:</label>
               <input
                 type="text"
                 name="address.state"
                 value={formData.address.state}
                 onChange={handleInputChange}
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+                className="form-input"
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>ZIP/Postal Code:</label>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">ZIP/Postal Code:</label>
               <input
                 type="text"
                 name="address.zipCode"
                 value={formData.address.zipCode}
                 onChange={handleInputChange}
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+                className="form-input"
                 required
               />
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Country:</label>
+            <div className="form-group">
+              <label className="form-label">Country:</label>
               <input
                 type="text"
                 name="address.country"
                 value={formData.address.country}
                 onChange={handleInputChange}
                 placeholder="e.g., United States"
-                style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd' }}
+                className="form-input"
               />
             </div>
           </div>
         </section>
 
         {/* Special Instructions */}
-        <section style={{ marginBottom: '30px' }}>
-          <h2 style={{ color: '#2c5530', borderBottom: '2px solid #2c5530', paddingBottom: '5px' }}>Special Instructions</h2>
+        <section className="section">
+          <h2 className="section-title">Special Instructions</h2>
           <textarea
             name="specialInstructions"
             value={formData.specialInstructions}
             onChange={handleInputChange}
             placeholder="Any special delivery instructions or additional notes..."
-            style={{ width: '100%', padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ddd', resize: 'vertical', minHeight: '100px' }}
+            className="form-textarea large"
           />
         </section>
 
         {/* Submit Button */}
-        <div style={{ textAlign: 'center' }}>
+        <div className="submit-container">
           <button
             type="submit"
-            style={{
-              padding: '15px 30px',
-              fontSize: '18px',
-              backgroundColor: '#2c5530',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-            }}
-            onMouseOver={(e) => e.target.style.backgroundColor = '#1a3d1f'}
-            onMouseOut={(e) => e.target.style.backgroundColor = '#2c5530'}
+            className="submit-btn"
           >
             Submit Order
           </button>
