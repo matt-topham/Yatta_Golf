@@ -1,4 +1,4 @@
-# invoice_maker.py
+# invoice_maker.py (fast login version)
 import os
 import sys
 import logging
@@ -13,14 +13,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 
 # ---------- Config ----------
+LOGIN_URL  = "https://www.printavo.com/users/sign_in"
 TARGET_URL = "https://www.printavo.com/quotes"
-ENV_PATH = os.path.expanduser("~/.config/printavo/.env")
-HEADLESS = False  # set to False to watch the browser
-PAGELOAD_TIMEOUT = 45
-ELEMENT_TIMEOUT = 25
+ENV_PATH   = os.path.expanduser("~/.config/printavo/.env")
+
+HEADLESS           = False  # set False to watch it
+PAGELOAD_TIMEOUT   = 20    # lower for quicker fail
+ELEMENT_TIMEOUT    = 8     # shorter, we “race” for elements
+POST_LOGIN_TIMEOUT = 15    # allow a bit more for the redirect
 
 # ---------- Logging ----------
-logger = logging.getLogger("printavo_login")
+logger = logging.getLogger("printavo_login_fast")
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
@@ -32,11 +35,10 @@ def load_secrets():
         load_dotenv(ENV_PATH)
         logger.info("Loaded env from %s", ENV_PATH)
     else:
-        logger.warning("No .env found at %s (will fall back to process env)", ENV_PATH)
+        logger.warning("No .env found at %s (falling back to env)", ENV_PATH)
 
     email = os.getenv("PRINTAVO_EMAIL")
     password = os.getenv("PRINTAVO_PASSWORD")
-
     if not email or not password:
         raise SystemExit("Missing PRINTAVO_EMAIL or PRINTAVO_PASSWORD in environment.")
     return email, password
@@ -44,10 +46,14 @@ def load_secrets():
 
 def build_driver():
     """
-    Use Selenium Manager (built into Selenium 4.6+) to resolve the matching driver automatically.
-    We point to the Chromium binary explicitly.
+    Use Selenium Manager (built-in) + Chromium binary.
+    Speed-ups:
+      - pageLoadStrategy 'eager'
+      - block images
+      - headless=new
     """
     opts = Options()
+    opts.page_load_strategy = "eager"
     if HEADLESS:
         opts.add_argument("--headless=new")
     opts.add_argument("--window-size=1280,900")
@@ -55,55 +61,64 @@ def build_driver():
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--disable-blink-features=AutomationControlled")
-
-    # Tell Selenium to use your system Chromium binary
+    # Use system Chromium
     opts.binary_location = "/usr/bin/chromium-browser"
+    # Block images to speed load
+    prefs = {"profile.managed_default_content_settings.images": 2}
+    opts.add_experimental_option("prefs", prefs)
 
-    # Selenium Manager will fetch the right chromedriver automatically
     driver = webdriver.Chrome(options=opts)
     driver.set_page_load_timeout(PAGELOAD_TIMEOUT)
     return driver
 
 
+def on_signed_in_page(d):
+    url = d.current_url
+    return any(x in url for x in ("/quotes", "/invoices", "/dashboard"))
+
+
 def wait_for_quotes(driver):
-    WebDriverWait(driver, ELEMENT_TIMEOUT).until(EC.url_contains("/quotes"))
-    possible_locators = [
-        (By.CSS_SELECTOR, "h1, h2, h3"),
-        (By.CSS_SELECTOR, "table, [role='table'], .table"),
-        (By.CSS_SELECTOR, "[data-controller*='quotes'], [data-controller*='invoices']")
-    ]
-    for by, sel in possible_locators:
-        try:
-            WebDriverWait(driver, 5).until(EC.presence_of_element_located((by, sel)))
-            return
-        except TimeoutException:
-            continue
-    sleep(1)
+    WebDriverWait(driver, POST_LOGIN_TIMEOUT).until(EC.url_contains("/quotes"))
+    # a small presence check just to be sure we’re “there”
+    WebDriverWait(driver, 5).until(
+        EC.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, "h1, h2, h3, table, [role='table'], .table")
+        )
+    )
+
 
 
 def do_login(driver, email, password):
-    logger.info("Navigating to %s", TARGET_URL)
-    driver.get(TARGET_URL)
+    # Go directly to the login page (faster than redirecting from /quotes)
+    logger.info("Navigating to %s", LOGIN_URL)
+    driver.get(LOGIN_URL)
 
-    # If already logged in, we should land on /quotes quickly
+    # Quick race: if we’re already logged in (cookies), we might get bounced away fast
     try:
+        WebDriverWait(driver, ELEMENT_TIMEOUT).until(
+            lambda d: on_signed_in_page(d)
+                      or (d.find_elements(By.ID, "user_email")
+                          and d.find_elements(By.ID, "user_password"))
+        )
+    except TimeoutException:
+        logger.warning("Neither login form nor signed-in page detected quickly; proceeding anyway.")
+
+    # If we’re already signed in, go straight to quotes and return
+    if on_signed_in_page(driver):
+        logger.info("Session already authenticated; going to Quotes.")
+        driver.get(TARGET_URL)
         wait_for_quotes(driver)
-        logger.info("Already logged in; on Quotes page.")
+        logger.info("On Quotes.")
         return
-    except TimeoutException:
-        pass
 
-    # Look for login form fields (IDs from your screenshots)
+    # Otherwise, fill the login form immediately
     try:
-        email_input = WebDriverWait(driver, ELEMENT_TIMEOUT).until(
-            EC.presence_of_element_located((By.ID, "user_email"))
-        )
-        pwd_input = WebDriverWait(driver, ELEMENT_TIMEOUT).until(
-            EC.presence_of_element_located((By.ID, "user_password"))
-        )
-        logger.info("Login form located.")
-    except TimeoutException:
-        logger.warning("ID-based login fields not found; trying fallback selectors.")
+        email_input = driver.find_element(By.ID, "user_email")
+        pwd_input   = driver.find_element(By.ID, "user_password")
+        logger.info("Login form located quickly.")
+    except NoSuchElementException:
+        # Fallback selectors if IDs aren’t there
+        logger.info("Falling back to generic selectors for login fields.")
         email_input = WebDriverWait(driver, ELEMENT_TIMEOUT).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email'], input[name='user[email]']"))
         )
@@ -114,24 +129,18 @@ def do_login(driver, email, password):
     email_input.clear(); email_input.send_keys(email)
     pwd_input.clear();   pwd_input.send_keys(password)
 
-    # Click Login button
+    # Submit login (prefer button[type=submit])
     try:
-        login_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit'][value='Login']")
+        login_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
     except NoSuchElementException:
         login_btn = WebDriverWait(driver, ELEMENT_TIMEOUT).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[normalize-space()='Login' or @type='submit'] | //input[@type='submit']"))
+            EC.element_to_be_clickable((By.XPATH, "//button[@type='submit' or normalize-space()='Login'] | //input[@type='submit']"))
         )
-
     logger.info("Submitting login…")
     login_btn.click()
 
-    # Wait for redirect to a signed-in page
-    WebDriverWait(driver, PAGELOAD_TIMEOUT).until(EC.any_of(
-        EC.url_contains("/quotes"),
-        EC.url_contains("/invoices"),
-        EC.url_contains("/dashboard")
-    ))
-
+    # After login, go to Quotes explicitly (faster than waiting on default redirect)
+    driver.get(TARGET_URL)
     wait_for_quotes(driver)
     logger.info("Login successful; now on Quotes.")
 
@@ -148,7 +157,7 @@ def main():
         do_login(driver, email, password)
         logger.info("Ready for next steps (create invoice, etc.).")
         if not HEADLESS:
-            sleep(3)
+            sleep(2)
     finally:
         driver.quit()
 
