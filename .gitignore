@@ -1,0 +1,7 @@
+# Ignore Node project configs
+package-lock.json
+package.json
+
+# Ignore your static HTML entrypoint
+public/index.html
+
