@@ -149,6 +149,79 @@ body {
   }
 }
 
+/* Toggle Button Styles */
+.quantity-mode-toggle {
+  margin-bottom: 5px;
+}
+
+.toggle-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8f9fa;
+  border: 2px solid #2c5530;
+  border-radius: 25px;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  max-width: 400px;
+  font-family: inherit;
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.toggle-btn:focus {
+  outline: 2px solid #2c5530;
+  outline-offset: 2px;
+}
+
+.toggle-option {
+  flex: 1;
+  padding: 12px 20px;
+  text-align: center;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  color: #666;
+  position: relative;
+  z-index: 2;
+}
+
+.toggle-option.active {
+  background-color: #2c5530;
+  color: white;
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(44, 85, 48, 0.3);
+}
+
+.toggle-btn:hover .toggle-option:not(.active) {
+  color: #2c5530;
+  background-color: rgba(44, 85, 48, 0.1);
+}
+
+.toggle-btn.single .toggle-option:first-child {
+  background-color: #2c5530;
+  color: white;
+}
+
+.toggle-btn.wholesale .toggle-option:last-child {
+  background-color: #2c5530;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .toggle-btn {
+    max-width: 100%;
+  }
+  
+  .toggle-option {
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+}
+
 /* Grid Layouts */
 .form-grid {
   display: grid;

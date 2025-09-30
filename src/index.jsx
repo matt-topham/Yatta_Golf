@@ -8,7 +8,9 @@ function App() {
   // State for products and form data
   const [products, setProducts] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [isWholesaleMode, setIsWholesaleMode] = React.useState(false);
   const [formData, setFormData] = React.useState({
+    nickname: '',
     selectedProduct: '',
     decorationType: '',
     customDecoration: '',
@@ -122,7 +124,7 @@ function App() {
   };
 
   // Handle form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Basic validation
@@ -141,9 +143,164 @@ function App() {
       return;
     }
 
-    // Submit form data (replace with actual API call)
-    console.log('Form submitted:', formData);
-    alert('Order submitted successfully!');
+    // Validate decoration fields if decoration is selected
+    if (formData.decorationType && (!formData.decorationLocation || !formData.decorationSize)) {
+      alert('Please complete all decoration fields (location and size)');
+      return;
+    }
+
+    // Create order object
+    const order = {
+      orderId: `YG-${Date.now()}`,
+      nickname: formData.nickname,
+      timestamp: new Date().toISOString(),
+      customer: {
+        name: formData.customerName,
+        email: formData.email,
+        phone: formData.phone || null
+      },
+      product: {
+        id: formData.selectedProduct,
+        name: selectedProductDetails?.name || '',
+        price: selectedProductDetails?.price || 0,
+        description: selectedProductDetails?.description || ''
+      },
+      quantity: {
+        total: formData.quantity,
+        sizes: formData.sizes,
+        totalBySizes: Object.values(formData.sizes).reduce((sum, qty) => sum + qty, 0)
+      },
+      decoration: formData.decorationType ? {
+        type: formData.decorationType,
+        location: formData.decorationLocation,
+        size: formData.decorationSize,
+        details: formData.customDecoration,
+        fileName: formData.decorationFile?.name || null,
+        fileSize: formData.decorationFile?.size || null,
+        fileType: formData.decorationFile?.type || null
+      } : null,
+      shipping: {
+        address: {
+          street: formData.address.street,
+          city: formData.address.city,
+          state: formData.address.state,
+          zipCode: formData.address.zipCode,
+          country: formData.address.country
+        },
+        specialInstructions: formData.specialInstructions || null
+      },
+      status: 'pending',
+      totalAmount: calculateTotal()
+    };
+
+    try {
+      // Create and download JSON file
+      const jsonString = JSON.stringify(order, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `order-${order.orderId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Log to console for development
+      console.log('Order created:', order);
+      
+      alert('Order submitted successfully! Your order file has been downloaded.');
+      
+      // Reset form after successful submission
+      setFormData({
+        nickname: '',
+        selectedProduct: '',
+        decorationType: '',
+        customDecoration: '',
+        decorationLocation: '',
+        decorationSize: '',
+        decorationFile: null,
+        quantity: 1,
+        sizes: {
+          XS: 0,
+          S: 0,
+          M: 0,
+          L: 0,
+          XL: 0,
+          '2XL': 0
+        },
+        customerName: '',
+        email: '',
+        phone: '',
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: ''
+        },
+        specialInstructions: ''
+      });
+
+    } catch (error) {
+      console.error('Error creating order:', error);
+      alert('There was an error submitting your order. Please try again.');
+    }
+  };
+
+  // Toggle between single quantity and wholesale mode
+  const toggleWholesaleMode = () => {
+    setIsWholesaleMode(!isWholesaleMode);
+    // Reset quantities when switching modes
+    if (!isWholesaleMode) {
+      // Switching to wholesale mode - reset single quantity
+      setFormData(prev => ({
+        ...prev,
+        quantity: 1
+      }));
+    } else {
+      // Switching to single mode - reset sizes
+      setFormData(prev => ({
+        ...prev,
+        sizes: {
+          XS: 0,
+          S: 0,
+          M: 0,
+          L: 0,
+          XL: 0,
+          '2XL': 0
+        }
+      }));
+    }
+  };
+
+  // Calculate total amount (basic calculation)
+  const calculateTotal = () => {
+    if (!selectedProductDetails) return 0;
+    
+    const basePrice = selectedProductDetails.price;
+    const totalQuantity = isWholesaleMode 
+      ? Object.values(formData.sizes).reduce((sum, qty) => sum + qty, 0)
+      : formData.quantity;
+    
+    let total = basePrice * totalQuantity;
+    
+    // Add decoration cost (example pricing)
+    if (formData.decorationType) {
+      const decorationCosts = {
+        'embroidery': 5.00,
+        'screen-print': 3.00,
+        'heat-transfer': 4.00,
+        'engraving': 6.00,
+        'custom': 8.00
+      };
+      
+      const decorationCost = decorationCosts[formData.decorationType] || 0;
+      total += decorationCost * totalQuantity;
+    }
+    
+    return parseFloat(total.toFixed(2));
   };
 
   // Load products on component mount
@@ -158,7 +315,22 @@ function App() {
       <h1 className="app-title">Yatta Golf - Custom Product Order</h1>
       
       <form onSubmit={handleSubmit} className="order-form">
-        
+        {/* Nickname Section */}
+        <section className="section">
+          <h2 className="section-title">Order Nickname</h2>
+          <div className="form-group">
+            <label className="form-label">Nickname:</label>
+            <input
+              type="text"
+              name="nickname"
+              value={formData.nickname}
+              onChange={handleInputChange}
+              placeholder="e.g., John's Golf Order"
+              className="form-input"
+            />
+          </div>
+        </section>
+
         {/* Product Selection Section */}
         <section className="section">
           <h2 className="section-title">Product Selection</h2>
@@ -199,42 +371,66 @@ function App() {
             </div>
           )}
 
+          {/* Quantity Mode Toggle */}
           <div className="form-group">
-            <label className="form-label">Quantity:</label>
-            <input
-              type="number"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleInputChange}
-              min="1"
-              className="form-input quantity-input"
-              required
-            />
+            <div className="quantity-mode-toggle">
+              <label className="form-label">Order Type:</label>
+              <button
+                type="button"
+                onClick={toggleWholesaleMode}
+                className={`toggle-btn ${isWholesaleMode ? 'wholesale' : 'single'}`}
+              >
+                <span className={`toggle-option ${!isWholesaleMode ? 'active' : ''}`}>
+                  Single Quantity
+                </span>
+                <span className={`toggle-option ${isWholesaleMode ? 'active' : ''}`}>
+                  Wholesale Sizes
+                </span>
+              </button>
+            </div>
           </div>
 
-          {/* Product Sizes Section */}
-          <div className="form-group">
-            <label className="form-label">Product Sizes (Wholesale Orders):</label>
-            <div className="sizes-grid">
-              {Object.keys(formData.sizes).map(size => (
-                <div key={size} className="size-input-group">
-                  <label className="size-label">{size}:</label>
-                  <input
-                    type="number"
-                    name={`sizes.${size}`}
-                    value={formData.sizes[size]}
-                    onChange={handleInputChange}
-                    min="0"
-                    className="form-input size-input"
-                    placeholder="0"
-                  />
-                </div>
-              ))}
+          {/* Single Quantity Mode */}
+          {!isWholesaleMode && (
+            <div className="form-group">
+              <label className="form-label">Quantity:</label>
+              <input
+                type="number"
+                name="quantity"
+                value={formData.quantity}
+                onChange={handleInputChange}
+                min="1"
+                className="form-input quantity-input"
+                required
+              />
             </div>
-            <div className="total-quantity">
-              Total Units: {Object.values(formData.sizes).reduce((sum, qty) => sum + qty, 0)}
+          )}
+
+          {/* Wholesale Sizes Mode */}
+          {isWholesaleMode && (
+            <div className="form-group">
+              <label className="form-label">Product Sizes (Wholesale Orders):</label>
+              <div className="sizes-grid">
+                {Object.keys(formData.sizes).map(size => (
+                  <div key={size} className="size-input-group">
+                    <label className="size-label">{size}:</label>
+                    <input
+                      type="number"
+                      name={`sizes.${size}`}
+                      value={formData.sizes[size]}
+                      onChange={handleInputChange}
+                      min="0"
+                      className="form-input size-input"
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="total-quantity">
+                Total Units: {Object.values(formData.sizes).reduce((sum, qty) => sum + qty, 0)}
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* Decoration Section */}
