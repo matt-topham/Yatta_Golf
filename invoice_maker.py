@@ -19,7 +19,7 @@ QUOTES_URL      = "https://www.printavo.com/quotes"
 NEW_QUOTE_URL   = "https://www.printavo.com/invoices/new?quote=true"
 ENV_PATH        = os.path.expanduser("~/.config/printavo/.env")
 
-HEADLESS           = True   # set False to watch it work
+HEADLESS           = False   # set False to watch it work
 PAGELOAD_TIMEOUT   = 30
 ELEMENT_TIMEOUT    = 10
 POST_LOGIN_TIMEOUT = 20
