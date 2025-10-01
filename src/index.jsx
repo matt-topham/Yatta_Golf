@@ -9,8 +9,14 @@ function App() {
   const [products, setProducts] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [isWholesaleMode, setIsWholesaleMode] = React.useState(false);
+  const [productionLocation, setProductionLocation] = React.useState('local'); // 'local' or 'overseas'
+  const [productSearch, setProductSearch] = React.useState('');
+  const [showProductDropdown, setShowProductDropdown] = React.useState(false);
+  const [filteredProducts, setFilteredProducts] = React.useState([]);
   const [formData, setFormData] = React.useState({
+    productionLocation: 'local',
     nickname: '',
+    dueDate: '',
     selectedProduct: '',
     decorationType: '',
     customDecoration: '',
@@ -43,20 +49,20 @@ function App() {
   const decorationTypes = [
     { value: 'embroidery', label: 'Embroidery' },
     { value: 'screen-print', label: 'Screen Print' },
-    { value: 'heat-transfer', label: 'Heat Transfer' },
-    { value: 'engraving', label: 'Engraving' },
-    { value: 'custom', label: 'Custom Design' }
+    { value: 'DTF', label: 'DTF (Direct to Film)' },
+    { value: 'DTG', label: 'DTG (Direct to Garment)' },
   ];
 
   // Decoration locations
   const decorationLocations = [
-    { value: 'front-chest', label: 'Front Chest' },
+    { value: 'left-chest', label: 'Left Chest' },
+    { value: 'right-chest', label: 'Right Chest' },
     { value: 'front-center', label: 'Front Center' },
     { value: 'back-center', label: 'Back Center' },
     { value: 'back-upper', label: 'Back Upper' },
     { value: 'left-sleeve', label: 'Left Sleeve' },
     { value: 'right-sleeve', label: 'Right Sleeve' },
-    { value: 'collar', label: 'Collar' },
+    //{ value: 'collar', label: 'Collar' },
     { value: 'pocket', label: 'Pocket Area' }
   ];
 
@@ -71,13 +77,28 @@ function App() {
   async function fetchProducts() {
     setLoading(true);
     try {
-      // Replace with your actual API endpoint
-      const response = await fetch('/api/products');
-      const data = await response.json();
-      setProducts(data);
+      // Fetch from CSV file
+      const response = await fetch('/Yatta_Data(Sheet2).csv');
+      const csvText = await response.text();
+      
+      // Parse CSV data
+      const lines = csvText.split('\n');
+      
+      // Convert CSV to product objects
+      const csvProducts = lines.slice(1)
+        .filter(line => line.trim()) // Remove empty lines
+        .map((line, index) => {
+          const values = line.split(',');
+          return {
+            id: index + 1,
+            name: values[0] ? values[0].trim() : `Product ${index + 1}`,
+          };
+        });
+      
+      setProducts(csvProducts);
     } catch (error) {
-      console.error('Error fetching products:', error);
-      // For demo purposes, setting mock data
+      console.error('Error fetching products from CSV:', error);
+      // Fallback to mock data if CSV fails
       setProducts([
         { id: 1, name: 'Golf Polo Shirt', price: 45.99, description: 'Premium cotton golf polo' },
         { id: 2, name: 'Golf Cap', price: 25.99, description: 'Adjustable golf cap with UV protection' },
@@ -87,6 +108,40 @@ function App() {
     }
     setLoading(false);
   }
+
+  // Toggle production location
+  const toggleProductionLocation = () => {
+    const newLocation = productionLocation === 'local' ? 'overseas' : 'local';
+    setProductionLocation(newLocation);
+    setFormData(prev => ({
+      ...prev,
+      productionLocation: newLocation
+    }));
+  };
+
+  // Handle product search
+  const handleProductSearch = (e) => {
+    const searchValue = e.target.value;
+    setProductSearch(searchValue);
+    setShowProductDropdown(true);
+    
+    // Filter products based on search
+    if (searchValue.trim() === '') {
+      setFilteredProducts(products.slice(0, 10)); // Show first 10 when empty
+    } else {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(searchValue.toLowerCase())
+      ).slice(0, 10); // Limit to 10 results
+      setFilteredProducts(filtered);
+    }
+  };
+
+  // Handle product selection from dropdown
+  const handleProductSelect = (product) => {
+    setFormData(prev => ({ ...prev, selectedProduct: product.id }));
+    setProductSearch(product.name);
+    setShowProductDropdown(false);
+  };
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -132,6 +187,19 @@ function App() {
       alert('Please select a product');
       return;
     }
+
+    if (!formData.dueDate) {
+      alert('Please select a due date');
+      return;
+    }
+
+    // Validate due date is at least 2 weeks from today
+    const selectedDate = new Date(formData.dueDate);
+    const minDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    if (selectedDate < minDate) {
+      alert('Due date must be at least 2 weeks from today. Please select a later date.');
+      return;
+    }
     
     if (!formData.customerName || !formData.email) {
       alert('Please fill in your name and email');
@@ -152,7 +220,9 @@ function App() {
     // Create order object
     const order = {
       orderId: `YG-${Date.now()}`,
+      productionLocation: formData.productionLocation,
       nickname: formData.nickname,
+      dueDate: formData.dueDate,
       timestamp: new Date().toISOString(),
       customer: {
         name: formData.customerName,
@@ -162,8 +232,8 @@ function App() {
       product: {
         id: formData.selectedProduct,
         name: selectedProductDetails?.name || '',
-        price: selectedProductDetails?.price || 0,
-        description: selectedProductDetails?.description || ''
+        //price: selectedProductDetails?.price || 0,
+        //description: selectedProductDetails?.description || ''
       },
       quantity: {
         total: formData.quantity,
@@ -190,7 +260,7 @@ function App() {
         specialInstructions: formData.specialInstructions || null
       },
       status: 'pending',
-      totalAmount: calculateTotal()
+      //totalAmount: calculateTotal()
     };
 
     try {
@@ -214,7 +284,9 @@ function App() {
       
       // Reset form after successful submission
       setFormData({
+        productionLocation: 'local',
         nickname: '',
+        dueDate: '',
         selectedProduct: '',
         decorationType: '',
         customDecoration: '',
@@ -308,6 +380,25 @@ function App() {
     fetchProducts();
   }, []);
 
+  // Update filtered products when products change
+  React.useEffect(() => {
+    setFilteredProducts(products.slice(0, 10));
+  }, [products]);
+
+  // Handle clicking outside to close dropdown
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.searchable-select-container')) {
+        setShowProductDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const selectedProductDetails = products.find(p => p.id === parseInt(formData.selectedProduct));
 
   return (
@@ -315,6 +406,38 @@ function App() {
       <h1 className="app-title">Yatta Golf - Custom Product Order</h1>
       
       <form onSubmit={handleSubmit} className="order-form">
+        {/* Production Location Section */}
+        <section className="section">
+          <h2 className="section-title">Production Location</h2>
+          <div className="form-group">
+            <div className="production-location-toggle">
+              <button
+                type="button"
+                onClick={toggleProductionLocation}
+                className={`toggle-btn production-toggle ${productionLocation}`}
+              >
+                <span className={`toggle-option ${productionLocation === 'local' ? 'active' : ''}`}>
+                  🇺🇸 Local Production
+                </span>
+                <span className={`toggle-option ${productionLocation === 'overseas' ? 'active' : ''}`}>
+                  🌍 Overseas Production
+                </span>
+              </button>
+            </div>
+            {/* <div className="production-info">
+              {productionLocation === 'local' ? (
+                <p className="production-description">
+                  <strong>Local Production:</strong> Faster turnaround times, premium quality control, and support for domestic manufacturing.
+                </p>
+              ) : (
+                <p className="production-description">
+                  <strong>Overseas Production:</strong> Cost-effective solution for larger orders with extended lead times.
+                </p>
+              )}
+            </div> */}
+          </div>
+        </section>
+
         {/* Nickname Section */}
         <section className="section">
           <h2 className="section-title">Order Nickname</h2>
@@ -328,6 +451,27 @@ function App() {
               placeholder="e.g., John's Golf Order"
               className="form-input"
             />
+          </div>
+        </section>
+
+        {/* Due Date Section */}
+        <section className="section">
+          <h2 className="section-title">Due Date</h2>
+          <div className="form-group">
+            <label className="form-label">Required Completion Date:</label>
+            <input
+              type="date"
+              name="dueDate"
+              value={formData.dueDate}
+              onChange={handleInputChange}
+              min={new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+              className="form-input"
+              required
+            />
+            <div className="due-date-disclaimer">
+              <strong>⚠️ Important:</strong> All orders require a minimum of <strong>two weeks</strong> lead time. 
+              Please select a date that is at least 14 days from today's date to ensure proper processing and delivery.
+            </div>
           </div>
         </section>
 
@@ -348,31 +492,46 @@ function App() {
 
           <div className="form-group">
             <label className="form-label">Select Product:</label>
-            <select
-              name="selectedProduct"
-              value={formData.selectedProduct}
-              onChange={handleInputChange}
-              className="form-select"
-              required
-            >
-              <option value="">-- Choose a Product --</option>
-              {products.map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.name} - ${product.price}
-                </option>
-              ))}
-            </select>
+            <div className="searchable-select-container">
+              <input
+                type="text"
+                value={productSearch}
+                onChange={handleProductSearch}
+                onFocus={() => setShowProductDropdown(true)}
+                placeholder="Type to search products..."
+                className="form-input searchable-input"
+                autoComplete="off"
+              />
+              {showProductDropdown && filteredProducts.length > 0 && (
+                <div className="custom-dropdown">
+                  {filteredProducts.map(product => (
+                    <div
+                      key={product.id}
+                      className="dropdown-item"
+                      onClick={() => handleProductSelect(product)}
+                    >
+                      {product.name}
+                    </div>
+                  ))}
+                  {productSearch && filteredProducts.length === 0 && (
+                    <div className="dropdown-item no-results">
+                      No products found matching "{productSearch}"
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {selectedProductDetails && (
             <div className="product-details">
-              <strong>{selectedProductDetails.name}</strong> - ${selectedProductDetails.price}
+              <strong>{selectedProductDetails.name}</strong>
               <p>{selectedProductDetails.description}</p>
             </div>
           )}
 
           {/* Quantity Mode Toggle */}
-          <div className="form-group">
+          {/* <div className="form-group">
             <div className="quantity-mode-toggle">
               <label className="form-label">Order Type:</label>
               <button
@@ -388,10 +547,10 @@ function App() {
                 </span>
               </button>
             </div>
-          </div>
+          </div> */}
 
           {/* Single Quantity Mode */}
-          {!isWholesaleMode && (
+          {/* {!isWholesaleMode && (
             <div className="form-group">
               <label className="form-label">Quantity:</label>
               <input
@@ -404,10 +563,10 @@ function App() {
                 required
               />
             </div>
-          )}
+          )} */}
 
           {/* Wholesale Sizes Mode */}
-          {isWholesaleMode && (
+          {/* {isWholesaleMode && ( */}
             <div className="form-group">
               <label className="form-label">Product Sizes (Wholesale Orders):</label>
               <div className="sizes-grid">
@@ -430,7 +589,7 @@ function App() {
                 Total Units: {Object.values(formData.sizes).reduce((sum, qty) => sum + qty, 0)}
               </div>
             </div>
-          )}
+          {/* )} */}
         </section>
 
         {/* Decoration Section */}
@@ -571,71 +730,96 @@ function App() {
           </div> */}
         </section>
 
-        {/* Delivery Address Section */}
+        {/* Delivery Address Section for Local */}
+        {productionLocation === 'local' && (
+          <section className="section">
+            <h2 className="section-title">Delivery Address</h2>
+            
+            <div className="form-group">
+              <label className="form-label">Street Address:</label>
+              <input
+                type="text"
+                name="address.street"
+                value={formData.address.street}
+                onChange={handleInputChange}
+                className="form-input"
+                required
+              />
+            </div>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">City:</label>
+                <input
+                  type="text"
+                  name="address.city"
+                  value={formData.address.city}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">State/Province:</label>
+                <input
+                  type="text"
+                  name="address.state"
+                  value={formData.address.state}
+                  onChange={handleInputChange}
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">ZIP/Postal Code:</label>
+                <input
+                  type="text"
+                  name="address.zipCode"
+                  value={formData.address.zipCode}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Country:</label>
+                <input
+                  type="text"
+                  name="address.country"
+                  value={formData.address.country}
+                  onChange={handleInputChange}
+                  placeholder="e.g., United States"
+                  className="form-input"
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Delivery Address Section for Overseas */}
+        {productionLocation === 'overseas' ? (
         <section className="section">
-          <h2 className="section-title">Delivery Address</h2>
-          
+          <h2 className="section-title">Delivery Method</h2>
+
           <div className="form-group">
-            <label className="form-label">Street Address:</label>
-            <input
-              type="text"
-              name="address.street"
-              value={formData.address.street}
+            <label className="form-label">Select Delivery Method:</label>
+            <select
+              name="deliveryMethod"
+              value={formData.deliveryMethod}
               onChange={handleInputChange}
-              className="form-input"
+              className="form-select"
               required
-            />
-          </div>
-
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">City:</label>
-              <input
-                type="text"
-                name="address.city"
-                value={formData.address.city}
-                onChange={handleInputChange}
-                className="form-input"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">State/Province:</label>
-              <input
-                type="text"
-                name="address.state"
-                value={formData.address.state}
-                onChange={handleInputChange}
-                className="form-input"
-              />
-            </div>
-          </div>
-
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">ZIP/Postal Code:</label>
-              <input
-                type="text"
-                name="address.zipCode"
-                value={formData.address.zipCode}
-                onChange={handleInputChange}
-                className="form-input"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Country:</label>
-              <input
-                type="text"
-                name="address.country"
-                value={formData.address.country}
-                onChange={handleInputChange}
-                placeholder="e.g., United States"
-                className="form-input"
-              />
-            </div>
+            >
+              <option value="">Select a delivery method</option>
+              <option value="Yatta">Deliver to Yatta</option>
+              <option value="Client">Ship directly to client</option>
+              <option value="Truwear">Hold at Truwear</option>
+            </select>
           </div>
         </section>
+        ) : null}
 
         {/* Special Instructions */}
         <section className="section">
