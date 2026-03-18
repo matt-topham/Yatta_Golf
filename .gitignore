@@ -4,4 +4,10 @@ package.json
 
 # Ignore your static HTML entrypoint
 public/index.html
+node_modules/
+venv/
+.env
+dist/
+build/
+.DS_Store
 
